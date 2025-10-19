@@ -1,90 +1,23 @@
-import { createServerClient as createServerClientSSR } from "@supabase/ssr"
-import { cookies } from "next/headers"
+// lib/supabase/server.ts
+import 'server-only'
 
-/**
- * Create a Supabase client for server-side operations
- * IMPORTANT: Don't put this client in a global variable
- * Always create a new client within each function
- */
-export async function createServerClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+import { cookies } from 'next/headers'
+import { createServerClient } from '@supabase/ssr'
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn(
-      "[v0] Missing Supabase environment variables. Please add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to your project settings.",
-    )
+export function getServerSupabase() {
+  const cookieStore = cookies()
 
-    const createChainableMock = () => {
-      const mockResult = { data: [], error: null }
-      const chain: any = {
-        select: () => chain,
-        insert: () => chain,
-        update: () => chain,
-        delete: () => chain,
-        eq: () => chain,
-        neq: () => chain,
-        gt: () => chain,
-        gte: () => chain,
-        lt: () => chain,
-        lte: () => chain,
-        like: () => chain,
-        ilike: () => chain,
-        is: () => chain,
-        in: () => chain,
-        contains: () => chain,
-        containedBy: () => chain,
-        rangeGt: () => chain,
-        rangeGte: () => chain,
-        rangeLt: () => chain,
-        rangeLte: () => chain,
-        rangeAdjacent: () => chain,
-        overlaps: () => chain,
-        textSearch: () => chain,
-        match: () => chain,
-        not: () => chain,
-        or: () => chain,
-        filter: () => chain,
-        order: () => chain,
-        limit: () => chain,
-        range: () => chain,
-        single: () => ({ ...mockResult, data: null }),
-        maybeSingle: () => ({ ...mockResult, data: null }),
-        then: (resolve: any) => resolve(mockResult),
-        ...mockResult,
-      }
-      return chain
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get: (name: string) => cookieStore.get(name)?.value,
+        set: (name: string, value: string, options: any) =>
+          cookieStore.set({ name, value, ...options }),
+        remove: (name: string, options: any) =>
+          cookieStore.set({ name, value: '', ...options }),
+      },
     }
-
-    return {
-      auth: {
-        getUser: async () => ({ data: { user: null }, error: null }),
-        getSession: async () => ({ data: { session: null }, error: null }),
-      },
-      from: () => createChainableMock(),
-    } as any
-  }
-
-  const cookieStore = await cookies()
-
-  return createServerClientSSR(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll()
-      },
-      setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-        } catch {
-          // The "setAll" method was called from a Server Component.
-          // This can be ignored if you have middleware refreshing user sessions.
-        }
-      },
-    },
-  })
-}
-
-// Keep the old export for backward compatibility
-export async function createClient() {
-  return createServerClient()
+  )
 }

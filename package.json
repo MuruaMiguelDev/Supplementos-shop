@@ -8,6 +8,12 @@
     "lint": "eslint .",
     "start": "next start"
   },
+  "pnpm": {
+  "allow-scripts": {
+  "@tailwindcss/oxide": true,
+  "sharp": true
+  }
+},
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "latest",

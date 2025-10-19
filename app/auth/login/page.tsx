@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
@@ -27,28 +26,50 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient()
-      const { error, data } = await supabase.auth.signInWithPassword({
+
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
-
       if (error) throw error
+      const user = data.user
 
-      const { data: profile } = await supabase.from("profiles").select("is_admin").eq("id", data.user.id).single()
+      // Intentar leer profile, pero si falla por RLS lo tratamos como no-admin
+      let isAdmin = false
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_admin")
+          .eq("id", user.id)
+          .single()
+        isAdmin = Boolean(profile?.is_admin)
+      } catch {
+        isAdmin = false
+      }
 
       toast({
         title: "Bienvenido",
         description: "Has iniciado sesión correctamente",
       })
 
-      // Redirect admin to admin panel, regular users to dashboard
-      const redirect = searchParams.get("redirect") || (profile?.is_admin ? "/admin" : "/dashboard")
-      router.push(redirect)
+      // Sanitizar redirect para evitar open-redirects
+      const requested = searchParams.get("redirect")
+      const safeRedirect =
+        requested && requested.startsWith("/") && !requested.startsWith("//")
+          ? requested
+          : isAdmin
+          ? "/admin"
+          : "/dashboard"
+
+      router.push(safeRedirect)
       router.refresh()
-    } catch (error: any) {
+    } catch (err: any) {
+      const message =
+        err?.message?.toString?.() ||
+        "Credenciales incorrectas o no fue posible iniciar sesión"
       toast({
         title: "Error",
-        description: error.message || "Credenciales incorrectas",
+        description: message,
         variant: "destructive",
       })
     } finally {
@@ -77,6 +98,7 @@ export default function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     disabled={isLoading}
+                    autoComplete="email"
                   />
                 </div>
                 <div className="space-y-2">
@@ -88,6 +110,7 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={isLoading}
+                    autoComplete="current-password"
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>

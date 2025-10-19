@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import { Search, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -21,6 +20,7 @@ export function SearchDropdown() {
   const [isLoading, setIsLoading] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -29,7 +29,6 @@ export function SearchDropdown() {
         setIsOpen(false)
       }
     }
-
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
@@ -41,6 +40,10 @@ export function SearchDropdown() {
         return
       }
 
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
+
       setIsLoading(true)
       try {
         const params = new URLSearchParams({
@@ -48,17 +51,47 @@ export function SearchDropdown() {
           limit: "5",
           search: searchQuery,
         })
-        const response = await fetch(`/api/products?${params}`)
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch products")
-        }
-
+        const response = await fetch(`/api/products?${params.toString()}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        })
+        if (!response.ok) throw new Error("Failed to fetch products")
         const data = await response.json()
-        setResults(data.products || [])
+
+        // ✅ Normalizar resultados para que siempre exista `images[0]`
+        const normalized: Product[] = (data.products || []).map((p: any) => {
+          const images = p.images ?? (p.image ? [p.image] : [])
+          const priceNum = Number(p.price)
+          const compareNum = p.compare_at_price != null ? Number(p.compare_at_price) : undefined
+          const discount =
+            compareNum && compareNum > 0 ? Math.round(((compareNum - priceNum) / compareNum) * 100) : 0
+
+        return {
+            id: p.id,
+            slug: p.slug,
+            name: p.name,
+            brand: p.brand,
+            description: p.description,
+            price: priceNum,
+            compareAtPrice: compareNum,
+            image: p.image,
+            images,
+            category: p.category,
+            tags: p.tags || [],
+            rating: p.rating != null ? Number(p.rating) : undefined,
+            reviewsCount: p.reviews_count || 0,
+            stock: p.stock || 0,
+            discount,
+            inStock: (p.stock || 0) > 0,
+          } as Product
+        })
+
+        setResults(normalized)
         setSelectedIndex(-1)
       } catch (error) {
-        console.error("[v0] Error searching products:", error)
+        if ((error as any)?.name !== "AbortError") {
+          console.error("[v0] Error searching products:", error)
+        }
         setResults([])
       } finally {
         setIsLoading(false)
@@ -91,19 +124,13 @@ export function SearchDropdown() {
     } else if (e.key === "Enter") {
       e.preventDefault()
       if (results.length > 0) {
-        if (selectedIndex >= 0 && selectedIndex < results.length) {
-          // Navigate to selected product
-          router.push(`/productos/${results[selectedIndex].slug}`)
-          setIsOpen(false)
-          handleClear()
-        } else {
-          // Navigate to first result
-          router.push(`/productos/${results[0].slug}`)
+        const target = selectedIndex >= 0 ? results[selectedIndex] : results[0]
+        if (target) {
+          router.push(`/productos/${target.slug}`)
           setIsOpen(false)
           handleClear()
         }
       } else if (searchQuery.trim().length >= 2) {
-        // Navigate to search results page
         router.push(`/productos?search=${encodeURIComponent(searchQuery)}`)
         setIsOpen(false)
         handleClear()
@@ -175,8 +202,8 @@ export function SearchDropdown() {
                   >
                     <div className="relative w-16 h-16 flex-shrink-0 rounded-md overflow-hidden bg-muted">
                       <Image
-                        src={product.images[0] || "/placeholder.svg"}
-                        alt={product.name}
+                        src={product.images?.[0] ?? product.image ?? "/placeholder.svg"}
+                        alt={product.name ?? "Producto"}
                         fill
                         className="object-cover"
                       />
@@ -186,7 +213,7 @@ export function SearchDropdown() {
                       <p className="text-xs text-muted-foreground line-clamp-1">{product.brand}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="font-semibold text-sm">{formatCurrency(product.price)}</span>
-                        {product.discount > 0 && (
+                        {product.discount && product.discount > 0 && (
                           <Badge variant="destructive" className="text-xs">
                             -{product.discount}%
                           </Badge>

@@ -1,8 +1,7 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
@@ -20,36 +19,35 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [referralCode, setReferralCode] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
 
-  // Pre-fill referral code from URL if present
-  useState(() => {
-    const refCode = searchParams.get("ref")
-    if (refCode) {
-      setReferralCode(refCode)
-    }
-  })
+  // ✅ Pre-cargar código de referido desde la URL
+  useEffect(() => {
+    const refCode = (searchParams.get("ref") || "").trim().toUpperCase()
+    if (refCode) setReferralCode(refCode)
+  }, [searchParams])
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    const name = fullName.trim()
+    const emailTrim = email.trim()
+
+    if (!name) {
+      toast({ title: "Error", description: "Ingresa tu nombre completo", variant: "destructive" })
+      return
+    }
+
     if (password !== confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Las contraseñas no coinciden",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Las contraseñas no coinciden", variant: "destructive" })
       return
     }
 
     if (password.length < 6) {
-      toast({
-        title: "Error",
-        description: "La contraseña debe tener al menos 6 caracteres",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "La contraseña debe tener al menos 6 caracteres", variant: "destructive" })
       return
     }
 
@@ -58,34 +56,46 @@ export default function RegisterPage() {
     try {
       const supabase = createClient()
 
-      // First, check if referral code is valid (if provided)
-      let referredBy = null
+      // (Opcional) Validar código de referido si está presente
+      let referredBy: string | null = null
       if (referralCode) {
-        const { data: referrerProfile, error: referrerError } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("referral_code", referralCode.toUpperCase())
-          .single()
+        try {
+          const { data: referrerProfile } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("referral_code", referralCode)
+            .single()
 
-        if (referrerError || !referrerProfile) {
+          if (referrerProfile?.id) {
+            referredBy = referrerProfile.id
+          } else {
+            toast({
+              title: "Código de referido inválido",
+              description: "El código no existe. Continuaremos sin referido.",
+              variant: "destructive",
+            })
+          }
+        } catch {
+          // Si RLS impide leer, continuamos sin referido
           toast({
-            title: "Código de referido inválido",
-            description: "El código de referido no existe. Continuando sin referido.",
+            title: "No se pudo validar el referido",
+            description: "Continuaremos sin referido.",
             variant: "destructive",
           })
-        } else {
-          referredBy = referrerProfile.id
         }
       }
 
-      // Sign up the user
+      const redirectTo =
+        process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
+        `${window.location.origin}/dashboard`
+
       const { error } = await supabase.auth.signUp({
-        email,
+        email: emailTrim,
         password,
         options: {
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/dashboard`,
+          emailRedirectTo: redirectTo,
           data: {
-            full_name: fullName,
+            full_name: name,
             referred_by: referredBy,
           },
         },
@@ -95,14 +105,14 @@ export default function RegisterPage() {
 
       toast({
         title: "Cuenta creada",
-        description: "Por favor revisa tu email para confirmar tu cuenta",
+        description: "Revisa tu email para confirmar tu cuenta",
       })
 
       router.push("/auth/verify-email")
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "No se pudo crear la cuenta",
+        description: error?.message || "No se pudo crear la cuenta",
         variant: "destructive",
       })
     } finally {
@@ -131,8 +141,10 @@ export default function RegisterPage() {
                     onChange={(e) => setFullName(e.target.value)}
                     required
                     disabled={isLoading}
+                    autoComplete="name"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
@@ -143,8 +155,10 @@ export default function RegisterPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     disabled={isLoading}
+                    autoComplete="email"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="password">Contraseña</Label>
                   <Input
@@ -154,8 +168,10 @@ export default function RegisterPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     disabled={isLoading}
+                    autoComplete="new-password"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
                   <Input
@@ -165,8 +181,10 @@ export default function RegisterPage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
                     disabled={isLoading}
+                    autoComplete="new-password"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="referralCode">Código de Referido (Opcional)</Label>
                   <Input
@@ -178,9 +196,10 @@ export default function RegisterPage() {
                     disabled={isLoading}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Si tienes un código de referido, obtendrás un 15% de descuento en tu primera compra
+                    Si tienes un código de referido, obtendrás un 15% de descuento en tu primera compra.
                   </p>
                 </div>
+
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? (
                     <>
@@ -191,9 +210,13 @@ export default function RegisterPage() {
                     "Crear Cuenta"
                   )}
                 </Button>
+
                 <div className="text-center text-sm">
                   ¿Ya tienes cuenta?{" "}
-                  <Link href="/auth/login" className="text-primary underline underline-offset-4 hover:text-primary/80">
+                  <Link
+                    href="/auth/login"
+                    className="text-primary underline underline-offset-4 hover:text-primary/80"
+                  >
                     Inicia sesión
                   </Link>
                 </div>

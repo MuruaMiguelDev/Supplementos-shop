@@ -1,25 +1,24 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/server"
+import 'server-only'
+import { NextResponse } from 'next/server'
+import { getServerSupabase } from '@/lib/supabase/server'
 
 export async function GET(
-  request: NextRequest,
-  ctx: { params: Promise<{ slug: string }> } // 👈 params es una Promesa
+  _request: Request,
+  ctx: { params: { slug: string } } // ✅ params NO es una Promesa
 ) {
   try {
-    const supabase = await createServerClient()
-
-    // 👇 Desempaquetar params ANTES de usar slug
-    const { slug } = await ctx.params
+    const supabase = getServerSupabase() // ✅ sin await
+    const { slug } = ctx.params
 
     const { data: product, error } = await supabase
-      .from("products")
-      .select("*")
-      .eq("slug", slug)
+      .from('products')
+      .select('*')
+      .eq('slug', slug)
       .single()
 
     if (error || !product) {
-      console.error("[v0] Error fetching product:", error)
-      return NextResponse.json({ error: "Product not found" }, { status: 404 })
+      console.error('[api] Error fetching product by slug:', error)
+      return NextResponse.json({ error: 'Product not found' }, { status: 404 })
     }
 
     const transformedProduct = {
@@ -54,10 +53,10 @@ export async function GET(
     }
 
     return NextResponse.json(transformedProduct)
-  } catch (error) {
-    console.error("[v0] Unexpected error in product API:", error)
+  } catch (err) {
+    console.error('[api] Unexpected error in product by slug:', err)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
+      { error: err instanceof Error ? err.message : 'Unknown error' },
       { status: 500 }
     )
   }

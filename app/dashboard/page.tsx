@@ -1,5 +1,6 @@
+// app/dashboard/page.tsx
 import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+import { getServerSupabase } from "@/lib/supabase/server"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ProfileTab } from "@/components/dashboard/profile-tab"
 import { FavoritesTab } from "@/components/dashboard/favorites-tab"
@@ -7,8 +8,9 @@ import { ReferralsTab } from "@/components/dashboard/referrals-tab"
 import { CouponsTab } from "@/components/dashboard/coupons-tab"
 
 export default async function DashboardPage() {
-  const supabase = await createClient()
+  const supabase = getServerSupabase() // ✅ sin await
 
+  // usuario actual (SSR)
   const {
     data: { user },
     error,
@@ -18,43 +20,48 @@ export default async function DashboardPage() {
     redirect("/auth/login")
   }
 
-  // Fetch user profile
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+  // perfil
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single()
 
+  // si es admin, redirigir
   if (profile?.is_admin) {
     redirect("/admin")
   }
 
-  // Fetch favorites count
+  // conteo de favoritos
   const { count: favoritesCount } = await supabase
     .from("favorites")
     .select("*", { count: "exact", head: true })
     .eq("user_id", user.id)
 
-  // Fetch user coupons
+  // cupones del usuario
   const { data: userCoupons } = await supabase
     .from("user_coupons")
     .select(
       `
       *,
       coupon:coupons(*)
-    `,
+    `
     )
     .eq("user_id", user.id)
-    .eq("is_used", false)
+  // si quieres solo no usados:
+  // .eq("is_used", false)
 
+  // referidos del usuario
   const { data: referrals } = await supabase
     .from("referrals")
     .select(
       `
       *,
       referee:profiles!referrals_referee_id_fkey(full_name, created_at)
-    `,
+    `
     )
     .eq("referrer_id", user.id)
     .order("created_at", { ascending: false })
-
-  console.log("[v0] Referrals data:", referrals)
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -68,7 +75,9 @@ export default async function DashboardPage() {
           <TabsTrigger value="profile">Perfil</TabsTrigger>
           <TabsTrigger value="favorites">
             Favoritos
-            {favoritesCount ? <span className="ml-2 text-xs">({favoritesCount})</span> : null}
+            {typeof favoritesCount === "number" && favoritesCount > 0 ? (
+              <span className="ml-2 text-xs">({favoritesCount})</span>
+            ) : null}
           </TabsTrigger>
           <TabsTrigger value="coupons">
             Cupones
@@ -81,7 +90,7 @@ export default async function DashboardPage() {
         </TabsList>
 
         <TabsContent value="profile">
-          <ProfileTab user={user} profile={profile} />
+          <ProfileTab user={user} profile={profile ?? null} />
         </TabsContent>
 
         <TabsContent value="favorites">
@@ -89,11 +98,11 @@ export default async function DashboardPage() {
         </TabsContent>
 
         <TabsContent value="coupons">
-          <CouponsTab coupons={userCoupons || []} />
+          <CouponsTab coupons={userCoupons ?? []} />
         </TabsContent>
 
         <TabsContent value="referrals">
-          <ReferralsTab referralCode={profile?.referral_code} referrals={referrals || []} />
+          <ReferralsTab referralCode={profile?.referral_code ?? ""} referrals={referrals ?? []} />
         </TabsContent>
       </Tabs>
     </div>

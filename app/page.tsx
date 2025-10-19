@@ -6,12 +6,13 @@ import { Badge } from "@/components/ui/badge"
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
 import { formatCurrency } from "@/src/lib/utils/currency"
 import { ArrowRight, Star, Zap, Shield, Truck } from "lucide-react"
-import { createClient } from "@/lib/supabase/server"
+import { getServerSupabase } from "@/lib/supabase/server" // ⬅️ cambia a getServerSupabase
 
 export default async function HomePage() {
-  let products = []
+  let products: any[] = []
+
   try {
-    const supabase = await createClient()
+    const supabase = getServerSupabase() // ⬅️ sin await
     const { data, error } = await supabase
       .from("products")
       .select("*")

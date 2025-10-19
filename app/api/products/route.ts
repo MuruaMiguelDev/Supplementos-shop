@@ -1,114 +1,81 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/server"
+import 'server-only'
+import { NextResponse } from 'next/server'
+import { getServerSupabase } from '@/lib/supabase/server'
 
-export async function GET(request: NextRequest) {
+// GET /api/products?search=&page=&limit=&categories=&minPrice=&maxPrice=&inStock=&onSale=
+export async function GET(request: Request) {
   try {
-    console.log("[v0] Products API called")
+    const { searchParams } = new URL(request.url)
 
-    const supabase = await createServerClient()
+    const search = (searchParams.get('search') || '').trim()
+    const page = Math.max(1, Number(searchParams.get('page') || 1))
+    const limit = Math.min(50, Math.max(1, Number(searchParams.get('limit') || 24)))
 
-    const searchParams = request.nextUrl.searchParams
-    const page = Number.parseInt(searchParams.get("page") || "1")
-    const limit = Number.parseInt(searchParams.get("limit") || "12")
-    const search = searchParams.get("search") || undefined
-    const categories = searchParams.get("categories")?.split(",").filter(Boolean) || undefined
-    const minPrice = searchParams.get("minPrice") ? Number.parseFloat(searchParams.get("minPrice")!) : undefined
-    const maxPrice = searchParams.get("maxPrice") ? Number.parseFloat(searchParams.get("maxPrice")!) : undefined
-    const inStock = searchParams.get("inStock") === "true" ? true : undefined
-    const onSale = searchParams.get("onSale") === "true" ? true : undefined
-    const sortBy = searchParams.get("sortBy") || "created_at"
-    const sortOrder = (searchParams.get("sortOrder") || "desc") as "asc" | "desc"
+    const categoriesParam = (searchParams.get('categories') || '').trim()
+    const categories = categoriesParam
+      ? categoriesParam.split(',').map((c) => c.trim()).filter(Boolean)
+      : []
 
-    const offset = (page - 1) * limit
+    const minPrice = Number(searchParams.get('minPrice') ?? 0)
+    const maxPrice = Number(searchParams.get('maxPrice') ?? 9999999)
 
-    let query = supabase.from("products").select("*", { count: "exact" })
+    const inStock = (searchParams.get('inStock') || '').toLowerCase() === 'true'
+    const onSale = (searchParams.get('onSale') || '').toLowerCase() === 'true'
 
-    // Apply search filter
+    const from = (page - 1) * limit
+    const to = from + limit - 1
+
+    const supabase = getServerSupabase()
+    let query = supabase.from('products').select('*', { count: 'exact' })
+
     if (search) {
-      query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%,brand.ilike.%${search}%`)
+      // Busca por nombre (ajusta si quieres incluir descripción)
+      query = query.ilike('name', `%${search}%`)
     }
 
-    // Apply category filter
-    if (categories && categories.length > 0) {
-      query = query.in("category", categories)
+    if (categories.length > 0) {
+      // Filtra por cualquiera de las categorías
+      query = query.in('category', categories)
     }
 
-    // Apply price range filter
-    if (minPrice !== undefined) {
-      query = query.gte("price", minPrice)
-    }
-    if (maxPrice !== undefined) {
-      query = query.lte("price", maxPrice)
-    }
+    // Rango de precios
+    query = query.gte('price', isNaN(minPrice) ? 0 : minPrice)
+                 .lte('price', isNaN(maxPrice) ? 9999999 : maxPrice)
 
-    // Apply stock filter
     if (inStock) {
-      query = query.gt("stock", 0)
+      query = query.gt('stock', 0)
     }
 
-    // Apply sale filter
     if (onSale) {
-      query = query.not("compare_at_price", "is", null)
+      // Supabase no permite comparar columnas directamente; usamos que "esté seteado"
+      query = query.not('compare_at_price', 'is', null)
     }
 
-    // Apply sorting
-    const validSortColumns = ["created_at", "price", "name", "rating", "is_featured"]
-    const safeSortBy = validSortColumns.includes(sortBy) ? sortBy : "created_at"
-    query = query.order(safeSortBy, { ascending: sortOrder === "asc" })
+    // Orden estable y seguro (evitamos depender de created_at si no existe)
+    query = query.order('is_featured', { ascending: false }).order('name', { ascending: true })
 
-    // Get total count before pagination
-    const { count } = await supabase.from("products").select("*", { count: "exact", head: true })
+    // Paginación
+    query = query.range(from, to)
 
-    // Apply pagination
-    query = query.range(offset, offset + limit - 1)
-
-    const { data: products, error } = await query
+    const { data, error, count } = await query
 
     if (error) {
-      console.error("[v0] Error fetching products:", error)
+      console.error('Supabase error /api/products:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    console.log("[v0] Products fetched:", products?.length || 0)
-
-    const transformedProducts = (products || []).map((p: any) => ({
-      id: p.id,
-      slug: p.slug,
-      name: p.name,
-      brand: p.brand,
-      description: p.description,
-      price: Number(p.price),
-      compareAtPrice: p.compare_at_price ? Number(p.compare_at_price) : undefined,
-      image: p.image,
-      images: p.image ? [p.image] : [],
-      category: p.category,
-      categories: p.category ? [p.category] : [],
-      subcategory: p.subcategory,
-      tags: p.tags || [],
-      benefits: p.benefits || [],
-      ingredients: p.ingredients || [],
-      usage_instructions: p.usage_instructions,
-      warnings: p.warnings,
-      rating: p.rating ? Number(p.rating) : undefined,
-      reviewsCount: p.reviews_count || 0,
-      stock: p.stock || 0,
-      inStock: (p.stock || 0) > 0,
-      is_new: p.is_new || false,
-      is_featured: p.is_featured || false,
-      discount: p.compare_at_price
-        ? Math.round(((Number(p.compare_at_price) - Number(p.price)) / Number(p.compare_at_price)) * 100)
-        : 0,
-    }))
+    const total = count ?? 0
+    const totalPages = Math.ceil(total / limit)
 
     return NextResponse.json({
-      products: transformedProducts,
-      total: count || 0,
+      products: data ?? [],
+      total,
       page,
       limit,
-      totalPages: Math.ceil((count || 0) / limit),
+      totalPages,
     })
-  } catch (error) {
-    console.error("[v0] Unexpected error in products API:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
+  } catch (err) {
+    console.error('API /products failed:', err)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

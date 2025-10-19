@@ -1,134 +1,123 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useEffect, useState } from "react"
+import { Slider } from "@/components/ui/slider" // si usas otro, adapta import
 import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
-import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
-import { formatCurrency } from "@/src/lib/utils/currency"
 
-interface ProductFiltersProps {
-  onFilterChange: (filters: FilterState) => void
-}
-
-export interface FilterState {
+export type FilterState = {
   categories: string[]
   priceRange: [number, number]
   inStock: boolean
   onSale: boolean
+  hasTouchedPrice?: boolean
 }
 
+type Props = {
+  onFilterChange: (filters: FilterState) => void
+  initial?: Partial<FilterState>
+}
+
+// Ajusta tus categorías según tus datos
 const CATEGORIES = ["Proteínas", "Creatina", "Pre-Entreno", "Aminoácidos", "Vitaminas", "Quemadores"]
 
-export function ProductFilters({ onFilterChange }: ProductFiltersProps) {
-  const [filters, setFilters] = useState<FilterState>({
-    categories: [],
-    priceRange: [0, 200],
-    inStock: false,
-    onSale: false,
-  })
+export function ProductFilters({ onFilterChange, initial }: Props) {
+  const [categories, setCategories] = useState<string[]>(initial?.categories ?? [])
+  const [priceRange, setPriceRange] = useState<[number, number]>(initial?.priceRange ?? [0, 1000])
+  const [inStock, setInStock] = useState<boolean>(initial?.inStock ?? false)
+  const [onSale, setOnSale] = useState<boolean>(initial?.onSale ?? false)
+  const [hasTouchedPrice, setHasTouchedPrice] = useState<boolean>(initial?.hasTouchedPrice ?? false)
 
-  const handleCategoryChange = (category: string, checked: boolean) => {
-    const newCategories = checked ? [...filters.categories, category] : filters.categories.filter((c) => c !== category)
+  // Emitimos cambios “no precio” de inmediato
+  useEffect(() => {
+    onFilterChange({ categories, priceRange, inStock, onSale, hasTouchedPrice })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories, inStock, onSale])
 
-    const newFilters = { ...filters, categories: newCategories }
-    setFilters(newFilters)
-    onFilterChange(newFilters)
+  // Handlers
+  const toggleCategory = (cat: string) => {
+    setCategories((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    )
   }
 
-  const handlePriceChange = (value: number[]) => {
-    // Always ensure min is less than or equal to max
-    const min = Math.min(value[0], value[1])
-    const max = Math.max(value[0], value[1])
-    const newFilters = { ...filters, priceRange: [min, max] as [number, number] }
-    setFilters(newFilters)
-    onFilterChange(newFilters)
+  const handlePriceChange = (val: number[]) => {
+    // Mientras se arrastra, solo actualizamos UI local
+    setPriceRange([val[0] ?? 0, val[1] ?? 0] as [number, number])
   }
 
-  const handleStockChange = (checked: boolean) => {
-    const newFilters = { ...filters, inStock: checked }
-    setFilters(newFilters)
-    onFilterChange(newFilters)
+  const handlePriceCommit = (val: number[]) => {
+    // Cuando suelta el slider: marcamos bandera y notificamos
+    const next: [number, number] = [val[0] ?? 0, val[1] ?? 0]
+    setPriceRange(next)
+    setHasTouchedPrice(true)
+    onFilterChange({ categories, priceRange: next, inStock, onSale, hasTouchedPrice: true })
   }
 
-  const handleSaleChange = (checked: boolean) => {
-    const newFilters = { ...filters, onSale: checked }
-    setFilters(newFilters)
-    onFilterChange(newFilters)
-  }
-
-  const handleReset = () => {
-    const resetFilters: FilterState = {
+  const clearAll = () => {
+    setCategories([])
+    setPriceRange([0, 1000])
+    setInStock(false)
+    setOnSale(false)
+    setHasTouchedPrice(false)
+    onFilterChange({
       categories: [],
-      priceRange: [0, 200],
+      priceRange: [0, 1000],
       inStock: false,
       onSale: false,
-    }
-    setFilters(resetFilters)
-    onFilterChange(resetFilters)
+      hasTouchedPrice: false,
+    })
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Filtros</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Categories */}
-        <div className="space-y-3">
-          <h3 className="font-semibold">Categorías</h3>
-          {CATEGORIES.map((category) => (
-            <div key={category} className="flex items-center space-x-2">
+    <div className="space-y-6 p-4 rounded-lg border">
+      <h3 className="font-semibold">Filtros</h3>
+
+      <div className="space-y-3">
+        <p className="text-sm font-medium">Categorías</p>
+        <div className="space-y-2">
+          {CATEGORIES.map((cat) => (
+            <label key={cat} className="flex items-center gap-2">
               <Checkbox
-                id={category}
-                checked={filters.categories.includes(category)}
-                onCheckedChange={(checked) => handleCategoryChange(category, checked as boolean)}
+                checked={categories.includes(cat)}
+                onCheckedChange={() => toggleCategory(cat)}
               />
-              <Label htmlFor={category} className="cursor-pointer">
-                {category}
-              </Label>
-            </div>
+              <span className="text-sm">{cat}</span>
+            </label>
           ))}
         </div>
+      </div>
 
-        {/* Price Range */}
-        <div className="space-y-3">
-          <h3 className="font-semibold">Rango de precio</h3>
-          <Slider
-            min={0}
-            max={200}
-            step={10}
-            value={filters.priceRange}
-            onValueChange={handlePriceChange}
-            className="mt-2"
-          />
-          <div className="flex justify-between text-sm text-muted-foreground">
-            <span>{formatCurrency(filters.priceRange[0])}</span>
-            <span>{formatCurrency(filters.priceRange[1])}</span>
-          </div>
+      <div className="space-y-3">
+        <p className="text-sm font-medium">Rango de precio</p>
+        <Slider
+          min={0}
+          max={1000}
+          step={1}
+          value={priceRange}
+          onValueChange={handlePriceChange}   // solo mueve UI
+          onValueCommit={handlePriceCommit}  // 🔑 recién aquí aplica filtro real
+        />
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>{priceRange[0].toLocaleString("es-US", { style: "currency", currency: "USD" })}</span>
+          <span>{priceRange[1].toLocaleString("es-US", { style: "currency", currency: "USD" })}</span>
         </div>
+      </div>
 
-        {/* Stock & Sale */}
-        <div className="space-y-3">
-          <div className="flex items-center space-x-2">
-            <Checkbox id="inStock" checked={filters.inStock} onCheckedChange={handleStockChange} />
-            <Label htmlFor="inStock" className="cursor-pointer">
-              Solo en stock
-            </Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox id="onSale" checked={filters.onSale} onCheckedChange={handleSaleChange} />
-            <Label htmlFor="onSale" className="cursor-pointer">
-              En oferta
-            </Label>
-          </div>
-        </div>
+      <div className="space-y-2">
+        <label className="flex items-center gap-2">
+          <Checkbox checked={inStock} onCheckedChange={(v) => setInStock(Boolean(v))} />
+          <span className="text-sm">Solo en stock</span>
+        </label>
+        <label className="flex items-center gap-2">
+          <Checkbox checked={onSale} onCheckedChange={(v) => setOnSale(Boolean(v))} />
+          <span className="text-sm">En oferta</span>
+        </label>
+      </div>
 
-        <Button onClick={handleReset} variant="outline" className="w-full bg-transparent">
-          Limpiar filtros
-        </Button>
-      </CardContent>
-    </Card>
+      <Button variant="outline" className="w-full" onClick={clearAll}>
+        Limpiar filtros
+      </Button>
+    </div>
   )
 }

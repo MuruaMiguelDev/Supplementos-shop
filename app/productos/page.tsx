@@ -19,6 +19,7 @@ export default function ProductsPage() {
     priceRange: [0, 200],
     inStock: false,
     onSale: false,
+    hasTouchedPrice: false,   // 🔑
   })
   const [page, setPage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
@@ -34,23 +35,24 @@ export default function ProductsPage() {
 
         if (searchQuery) params.append("search", searchQuery)
         if (filters.categories.length > 0) params.append("categories", filters.categories.join(","))
-        if (filters.priceRange) {
-          params.append("minPrice", filters.priceRange[0].toString())
-          params.append("maxPrice", filters.priceRange[1].toString())
+
+        // 🔑 Solo enviar precio si el usuario tocó el slider
+        if (filters.hasTouchedPrice) {
+          const [min, max] = filters.priceRange || [0, 200]
+          params.append("minPrice", String(min))
+          params.append("maxPrice", String(max))
         }
+
         if (filters.inStock) params.append("inStock", "true")
         if (filters.onSale) params.append("onSale", "true")
 
-        const response = await fetch(`/api/products?${params.toString()}`)
-        if (!response.ok) {
-          throw new Error("Failed to fetch products")
-        }
+        const response = await fetch(`/api/products?${params.toString()}`, { cache: "no-store" })
+        if (!response.ok) throw new Error("Failed to fetch products")
 
         const data = await response.json()
-        console.log("Raw API Response:", data)
-        // Transform API response to match expected format
+
         const transformedData: PaginatedProducts = {
-          products: data.products.map((p: any) => ({
+          products: (data.products || []).map((p: any) => ({
             id: p.id,
             slug: p.slug,
             name: p.name,
@@ -59,30 +61,27 @@ export default function ProductsPage() {
             price: Number(p.price),
             compareAtPrice: p.compare_at_price ? Number(p.compare_at_price) : undefined,
             image: p.image,
+            images: p.image ? [p.image] : [],
             category: p.category,
             tags: p.tags || [],
-            rating: p.rating ? Number(p.rating) : undefined,
+            rating: p.rating != null ? Number(p.rating) : undefined,
             reviewsCount: p.reviews_count || 0,
             stock: p.stock || 0,
-            discount: p.compare_at_price ? Math.round(((p.compare_at_price - p.price) / p.compare_at_price) * 100) : 0,
-            inStock: p.stock > 0,
+            discount: p.compare_at_price
+              ? Math.round(((Number(p.compare_at_price) - Number(p.price)) / Number(p.compare_at_price)) * 100)
+              : 0,
+            inStock: (p.stock || 0) > 0,
           })),
-          total: data.total,
-          page: data.page,
-          pageSize: data.limit,
-          totalPages: data.totalPages,
+          total: Number(data.total ?? 0),
+          page: Number(data.page ?? 1),
+          pageSize: Number(data.limit ?? 12),
+          totalPages: Number(data.totalPages ?? Math.ceil((Number(data.total ?? 0)) / Number(data.limit ?? 12))),
         }
 
         setProductsData(transformedData)
       } catch (error) {
         console.error("[v0] Error fetching products:", error)
-        setProductsData({
-          products: [],
-          total: 0,
-          page: 1,
-          pageSize: 12,
-          totalPages: 0,
-        })
+        setProductsData({ products: [], total: 0, page: 1, pageSize: 12, totalPages: 0 })
       } finally {
         setIsLoading(false)
       }

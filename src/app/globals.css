@@ -1,0 +1,147 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* Typography */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", monospace;
+
+  /* Spacing & Layout */
+  --radius: 0.5rem;
+
+  /* Color Palette - Dark Theme Base */
+  --color-background: 13 13 13; /* #0d0d0d - deep black */
+  --color-foreground: 250 250 250; /* #fafafa - off-white */
+
+  --color-card: 23 23 23; /* #171717 - slightly lighter black */
+  --color-card-foreground: 250 250 250;
+
+  --color-popover: 23 23 23;
+  --color-popover-foreground: 250 250 250;
+
+  /* Primary - Vibrant Orange */
+  --color-primary: 255 107 0; /* #ff6b00 - energetic orange */
+  --color-primary-foreground: 255 255 255;
+
+  /* Secondary - Neon Yellow */
+  --color-secondary: 255 214 0; /* #ffd600 - bright yellow */
+  --color-secondary-foreground: 13 13 13;
+
+  /* Accent - Neon Green */
+  --color-accent: 57 255 20; /* #39ff14 - neon green */
+  --color-accent-foreground: 13 13 13;
+
+  /* Muted */
+  --color-muted: 38 38 38; /* #262626 - dark gray */
+  --color-muted-foreground: 163 163 163; /* #a3a3a3 - medium gray */
+
+  /* Borders */
+  --color-border: 38 38 38;
+  --color-input: 38 38 38;
+  --color-ring: 255 107 0; /* orange focus ring */
+
+  /* Status Colors */
+  --color-destructive: 239 68 68; /* #ef4444 - red */
+  --color-destructive-foreground: 255 255 255;
+
+  --color-success: 34 197 94; /* #22c55e - green */
+  --color-warning: 251 191 36; /* #fbbf24 - amber */
+  --color-info: 59 130 246; /* #3b82f6 - blue */
+
+  /* shadcn/ui styles */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* Light Theme Override */
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-background: 255 255 255; /* white */
+    --color-foreground: 13 13 13; /* dark text */
+
+    --color-card: 250 250 250; /* #fafafa - light gray */
+    --color-card-foreground: 13 13 13;
+
+    --color-popover: 255 255 255;
+    --color-popover-foreground: 13 13 13;
+
+    --color-primary: 255 107 0; /* keep vibrant orange */
+    --color-primary-foreground: 255 255 255;
+
+    --color-secondary: 255 214 0; /* keep yellow */
+    --color-secondary-foreground: 13 13 13;
+
+    --color-accent: 34 197 94; /* softer green for light mode */
+    --color-accent-foreground: 255 255 255;
+
+    --color-muted: 245 245 245; /* #f5f5f5 - very light gray */
+    --color-muted-foreground: 115 115 115; /* #737373 - medium gray */
+
+    --color-border: 229 229 229; /* #e5e5e5 */
+    --color-input: 229 229 229;
+    --color-ring: 255 107 0;
+  }
+}
+
+/* Base Styles */
+* {
+  border-color: rgb(var(--color-border));
+}
+
+body {
+  background-color: rgb(var(--color-background));
+  color: rgb(var(--color-foreground));
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(var(--color-muted));
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-primary));
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 107 0 / 0.8);
+}
+
+/* Focus Visible */
+:focus-visible {
+  outline: 2px solid rgb(var(--color-ring));
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background-color: rgb(var(--color-primary) / 0.3);
+  color: rgb(var(--color-foreground));
+}

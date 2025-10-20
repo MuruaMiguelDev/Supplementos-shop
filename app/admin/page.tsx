@@ -1,5 +1,6 @@
+import "server-only"
 import { redirect } from "next/navigation"
-import { createServerClient } from "@/lib/supabase/server"
+import { getServerSupabase } from "@/lib/supabase/server"
 import { requireAdmin } from "@/lib/supabase/admin"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,15 +18,22 @@ export default async function AdminPage() {
     redirect("/")
   }
 
-  const supabase = await createServerClient()
+  // ✅ Cliente Supabase del lado del servidor
+  const supabase = await getServerSupabase()
 
+  // ✅ Obtener usuario actual
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user?.id).single()
+  // ✅ Obtener perfil
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user?.id)
+    .single()
 
-  // Fetch summary statistics
+  // ✅ Consultas paralelas para estadísticas
   const [usersResult, ordersResult, revenueResult] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase.from("orders").select("id", { count: "exact", head: true }),
@@ -34,7 +42,8 @@ export default async function AdminPage() {
 
   const totalUsers = usersResult.count || 0
   const totalOrders = ordersResult.count || 0
-  const totalRevenue = revenueResult.data?.reduce((sum, order) => sum + Number(order.total), 0) || 0
+  const totalRevenue =
+    revenueResult.data?.reduce((sum, order) => sum + Number(order.total), 0) || 0
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -46,7 +55,7 @@ export default async function AdminPage() {
         <p className="text-muted-foreground">Gestiona tu tienda de suplementos</p>
       </div>
 
-      {/* Summary Cards */}
+      {/* ✅ Resumen general */}
       <div className="grid gap-4 md:grid-cols-3 mb-8">
         <Card>
           <CardHeader className="pb-3">
@@ -54,21 +63,25 @@ export default async function AdminPage() {
             <CardTitle className="text-3xl">{totalUsers}</CardTitle>
           </CardHeader>
         </Card>
+
         <Card>
           <CardHeader className="pb-3">
             <CardDescription>Total de Pedidos</CardDescription>
             <CardTitle className="text-3xl">{totalOrders}</CardTitle>
           </CardHeader>
         </Card>
+
         <Card>
           <CardHeader className="pb-3">
             <CardDescription>Ingresos Totales</CardDescription>
-            <CardTitle className="text-3xl">${totalRevenue.toFixed(2)}</CardTitle>
+            <CardTitle className="text-3xl">
+              ${totalRevenue.toFixed(2)}
+            </CardTitle>
           </CardHeader>
         </Card>
       </div>
 
-      {/* Admin Tabs */}
+      {/* ✅ Pestañas del panel admin */}
       <Tabs defaultValue="users" className="space-y-4">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="users">Usuarios</TabsTrigger>

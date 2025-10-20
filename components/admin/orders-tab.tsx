@@ -1,4 +1,5 @@
-import { createServerClient } from "@/lib/supabase/server"
+import "server-only"
+import { getServerSupabase } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -10,9 +11,13 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
 export async function OrdersTab() {
-  const supabase = await createServerClient()
+  const supabase = await getServerSupabase()
 
-  const { data: orders } = await supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(50)
+  const { data: orders = [] } = await supabase
+    .from("orders")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(50)
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -26,7 +31,7 @@ export async function OrdersTab() {
   }
 
   const getPaymentBadge = (status: string) => {
-    const variants: Record<string, "default" | "secondary" | "destructive"> = {
+    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
       pending: "secondary",
       paid: "default",
       failed: "destructive",
@@ -60,7 +65,7 @@ export async function OrdersTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orders?.map((order) => (
+              {orders.map((order: any) => (
                 <TableRow key={order.id}>
                   <TableCell className="font-mono text-sm">{order.order_number}</TableCell>
                   <TableCell className="font-medium">{order.customer_name}</TableCell>

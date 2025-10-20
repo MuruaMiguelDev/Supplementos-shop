@@ -1,4 +1,5 @@
-import { createServerClient } from "@/lib/supabase/server"
+import "server-only"
+import { getServerSupabase } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -7,9 +8,9 @@ import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 
 export async function UsersTab() {
-  const supabase = await createServerClient()
+  const supabase = await getServerSupabase()
 
-  const { data: users } = await supabase
+  const { data: users = [] } = await supabase
     .from("profiles")
     .select("*, referrals!referrals_referee_id_fkey(referrer_id)")
     .order("created_at", { ascending: false })
@@ -36,7 +37,7 @@ export async function UsersTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users?.map((user) => (
+              {users.map((user: any) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium">{user.full_name || "Sin nombre"}</TableCell>
                   <TableCell>{user.email}</TableCell>
@@ -53,10 +54,14 @@ export async function UsersTab() {
                     )}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {formatDistanceToNow(new Date(user.created_at), { addSuffix: true, locale: es })}
+                    {user.created_at
+                      ? formatDistanceToNow(new Date(user.created_at), { addSuffix: true, locale: es })
+                      : "-"}
                   </TableCell>
                   <TableCell>
-                    {!user.is_admin && <DeleteUserButton userId={user.id} userName={user.full_name || user.email} />}
+                    {!user.is_admin && (
+                      <DeleteUserButton userId={user.id} userName={user.full_name || user.email} />
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

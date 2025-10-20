@@ -1,4 +1,5 @@
-import { createServerClient } from "@/lib/supabase/server"
+import "server-only"
+import { getServerSupabase } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -8,9 +9,12 @@ import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 
 export async function CouponsTab() {
-  const supabase = await createServerClient()
+  const supabase = await getServerSupabase()
 
-  const { data: coupons } = await supabase.from("coupons").select("*").order("created_at", { ascending: false })
+  const { data: coupons = [] } = await supabase
+    .from("coupons")
+    .select("*")
+    .order("created_at", { ascending: false })
 
   return (
     <Card>
@@ -39,7 +43,7 @@ export async function CouponsTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {coupons?.map((coupon) => {
+              {coupons.map((coupon: any) => {
                 const isExpired = coupon.valid_until && new Date(coupon.valid_until) < new Date()
                 const isMaxedOut = coupon.max_uses && coupon.times_used >= coupon.max_uses
                 const isActive = coupon.is_active && !isExpired && !isMaxedOut

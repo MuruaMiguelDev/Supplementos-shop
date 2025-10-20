@@ -1,18 +1,19 @@
-import { createServerClient } from "@/lib/supabase/server"
+import "server-only"
+import { getServerSupabase } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { TrendingUp, Users, ShoppingCart, DollarSign } from "lucide-react"
 
 export async function AnalyticsTab() {
-  const supabase = await createServerClient()
+  const supabase = await getServerSupabase()
 
   // Fetch analytics data
   const [
-    { data: dailySales },
-    { data: productPerformance },
-    { data: customerAnalytics },
-    { data: referralPerformance },
-    { data: topCoupons },
+    { data: dailySales = [] },
+    { data: productPerformance = [] },
+    { data: customerAnalytics = [] },
+    { data: referralPerformance = [] },
+    { data: topCoupons = [] },
   ] = await Promise.all([
     supabase.from("daily_sales").select("*").limit(7).order("date", { ascending: false }),
     supabase.from("product_performance").select("*").limit(10),
@@ -22,8 +23,8 @@ export async function AnalyticsTab() {
   ])
 
   // Calculate totals
-  const totalRevenue = dailySales?.reduce((sum, day) => sum + Number(day.total_revenue || 0), 0) || 0
-  const totalOrders = dailySales?.reduce((sum, day) => sum + Number(day.total_orders || 0), 0) || 0
+  const totalRevenue = dailySales.reduce((sum, day) => sum + Number(day.total_revenue || 0), 0)
+  const totalOrders = dailySales.reduce((sum, day) => sum + Number(day.total_orders || 0), 0)
   const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0
 
   return (
@@ -66,7 +67,7 @@ export async function AnalyticsTab() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{customerAnalytics?.length || 0}</div>
+            <div className="text-2xl font-bold">{customerAnalytics.length}</div>
           </CardContent>
         </Card>
       </div>
@@ -89,8 +90,8 @@ export async function AnalyticsTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {dailySales?.map((day) => (
-                <TableRow key={day.date}>
+              {dailySales.map((day) => (
+                <TableRow key={day.id ?? day.date}>
                   <TableCell>{new Date(day.date).toLocaleDateString("es-MX")}</TableCell>
                   <TableCell>{day.total_orders}</TableCell>
                   <TableCell className="font-semibold">${Number(day.total_revenue).toFixed(2)}</TableCell>
@@ -120,8 +121,8 @@ export async function AnalyticsTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {productPerformance?.map((product) => (
-                <TableRow key={product.product_id}>
+              {productPerformance.map((product, index) => (
+                <TableRow key={product.product_id ?? `${product.product_name}-${index}`}>
                   <TableCell className="font-medium">{product.product_name}</TableCell>
                   <TableCell>{product.times_ordered}</TableCell>
                   <TableCell>{product.total_quantity}</TableCell>
@@ -151,8 +152,8 @@ export async function AnalyticsTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {customerAnalytics?.map((customer) => (
-                <TableRow key={customer.user_id}>
+              {customerAnalytics.map((customer, index) => (
+                <TableRow key={customer.user_id ?? `${customer.customer_email}-${index}`}>
                   <TableCell className="font-medium">{customer.customer_name}</TableCell>
                   <TableCell>{customer.customer_email}</TableCell>
                   <TableCell>{customer.total_orders}</TableCell>
@@ -183,8 +184,8 @@ export async function AnalyticsTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {referralPerformance?.map((referrer) => (
-                <TableRow key={referrer.referrer_id}>
+              {referralPerformance.map((referrer, index) => (
+                <TableRow key={referrer.referrer_id ?? `${referrer.referrer_name}-${index}`}>
                   <TableCell className="font-medium">{referrer.referrer_name}</TableCell>
                   <TableCell>
                     <code className="text-xs bg-muted px-2 py-1 rounded">{referrer.referral_code}</code>

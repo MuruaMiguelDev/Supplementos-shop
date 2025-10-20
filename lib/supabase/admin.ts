@@ -1,7 +1,7 @@
-import { createServerClient } from "./server"
+import { getServerSupabase } from "./server"
 
 export async function isAdmin(): Promise<boolean> {
-  const supabase = await createServerClient()
+  const supabase = await getServerSupabase()
 
   const {
     data: { user },
@@ -11,7 +11,11 @@ export async function isAdmin(): Promise<boolean> {
     return false
   }
 
-  const { data: profile } = await supabase.from("profiles").select("is_admin").eq("id", user.id).single()
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", user.id)
+    .single()
 
   return profile?.is_admin === true
 }

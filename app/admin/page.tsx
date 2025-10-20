@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 import "server-only"
 import { redirect } from "next/navigation"
 import { getServerSupabase } from "@/lib/supabase/server"

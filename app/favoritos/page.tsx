@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { createClient } from "@/lib/supabase/server"
+import { getServerSupabase } from "@/lib/supabase/server"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -10,29 +10,57 @@ import { RemoveFavoriteButton } from "@/components/remove-favorite-button"
 import { formatCurrency } from "@/src/lib/utils/currency"
 import { Heart } from "lucide-react"
 
+export const dynamic = "force-dynamic";
+
 export default async function FavoritesPage() {
-  const supabase = await createClient()
+  const supabase = await getServerSupabase()
 
   const {
     data: { user },
+    error: userError,
   } = await supabase.auth.getUser()
 
-  if (!user) {
-    redirect("/auth/login?redirect=/favoritos")
-  }
+  if (userError || !user) redirect("/auth/login?redirect=/favoritos")
 
-  // Fetch user's favorites
-  const { data: favorites } = await supabase
+  // 1) Traer slugs favoritos del usuario
+  const { data: favorites, error: favErr } = await supabase
     .from("favorites")
-    .select("*")
+    .select("product_slug")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
 
-  // Fetch product details for each favorite
-  const { listProducts } = await import("@/src/lib/api/products")
-  const productsData = await listProducts(1, 100, {})
-  const allProducts = productsData.products // Extract products array from paginated response
-  const favoriteProducts = favorites?.map((fav) => allProducts.find((p) => p.slug === fav.product_slug)).filter(Boolean)
+  if (favErr) {
+    // fallback a vacío
+    return emptyState()
+  }
+
+  const slugs = (favorites ?? []).map(f => f.product_slug).filter(Boolean)
+  if (slugs.length === 0) return emptyState()
+
+  // 2) Traer productos por slug
+  const { data: products, error: prodErr } = await supabase
+    .from("products")
+    .select("*")
+    .in("slug", slugs)
+
+  if (prodErr || !products) return emptyState()
+
+  // map a tu shape
+  const favoriteProducts = products.map(p => ({
+    id: p.id,
+    slug: p.slug,
+    name: p.name,
+    brand: p.brand,
+    description: p.description,
+    price: Number(p.price),
+    compareAtPrice: p.compare_at_price ? Number(p.compare_at_price) : undefined,
+    image: p.image,
+    images: p.image ? [p.image] : [],
+    category: p.category,
+    discount: p.compare_at_price
+      ? Math.round(((Number(p.compare_at_price) - Number(p.price)) / Number(p.compare_at_price)) * 100)
+      : 0,
+  }))
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -44,18 +72,11 @@ export default async function FavoritesPage() {
         <p className="text-muted-foreground">Productos que te gustan</p>
       </div>
 
-      {!favoriteProducts || favoriteProducts.length === 0 ? (
-        <div className="text-center py-12">
-          <Heart className="size-16 mx-auto mb-4 text-muted-foreground" />
-          <h2 className="text-2xl font-semibold mb-2">No tienes favoritos aún</h2>
-          <p className="text-muted-foreground mb-6">Explora nuestros productos y añade tus favoritos</p>
-          <Button asChild>
-            <Link href="/productos">Ver productos</Link>
-          </Button>
-        </div>
+      {favoriteProducts.length === 0 ? (
+        emptyState()
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {favoriteProducts.map((product: any) => (
+          {favoriteProducts.map((product) => (
             <Card key={product.id} className="group overflow-hidden flex flex-col">
               <CardHeader className="p-0 relative">
                 <Link href={`/productos/${product.slug}`}>
@@ -68,7 +89,7 @@ export default async function FavoritesPage() {
                     />
                   </div>
                 </Link>
-                {product.discount && product.discount > 0 && (
+                {product.discount > 0 && (
                   <Badge className="absolute top-2 left-2 bg-primary">-{product.discount}%</Badge>
                 )}
               </CardHeader>
@@ -78,17 +99,19 @@ export default async function FavoritesPage() {
                     {product.name}
                   </CardTitle>
                 </Link>
-                <Badge variant="secondary" className="mb-2">
-                  {product.category}
-                </Badge>
+                {product.category && (
+                  <Badge variant="secondary" className="mb-2">
+                    {product.category}
+                  </Badge>
+                )}
                 <div className="flex items-baseline gap-2">
-                  {product.discount && product.discount > 0 ? (
+                  {product.discount > 0 ? (
                     <>
                       <span className="text-2xl font-bold text-primary">
                         {formatCurrency(product.price * (1 - product.discount / 100))}
                       </span>
                       <span className="text-sm text-muted-foreground line-through">
-                        {formatCurrency(product.price)}
+                        {formatCurrency(product.compareAtPrice ?? product.price)}
                       </span>
                     </>
                   ) : (
@@ -97,13 +120,27 @@ export default async function FavoritesPage() {
                 </div>
               </CardContent>
               <CardFooter className="p-4 pt-0 flex-col gap-2">
-                <AddToCartButton product={product} className="w-full" />
+                <AddToCartButton product={product as any} className="w-full" />
                 <RemoveFavoriteButton productSlug={product.slug} />
               </CardFooter>
             </Card>
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// Componente simple para estado vacío
+function emptyState() {
+  return (
+    <div className="text-center py-12">
+      <Heart className="size-16 mx-auto mb-4 text-muted-foreground" />
+      <h2 className="text-2xl font-semibold mb-2">No tienes favoritos aún</h2>
+      <p className="text-muted-foreground mb-6">Explora nuestros productos y añade tus favoritos</p>
+      <Button asChild>
+        <Link href="/productos">Ver productos</Link>
+      </Button>
     </div>
   )
 }

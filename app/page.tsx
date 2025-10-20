@@ -12,12 +12,12 @@ export default async function HomePage() {
   let products: any[] = []
 
   try {
-    const supabase = getServerSupabase() // ⬅️ sin await
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .order("is_featured", { ascending: false })
-      .limit(6)
+    const supabase = await getServerSupabase() // ✅ con await
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .order("is_featured", { ascending: false })
+        .limit(6)
 
     if (!error && data) {
       products = data.map((p) => ({

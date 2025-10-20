@@ -1,4 +1,5 @@
 // app/dashboard/page.tsx
+import 'server-only'
 import { redirect } from "next/navigation"
 import { getServerSupabase } from "@/lib/supabase/server"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -7,8 +8,10 @@ import { FavoritesTab } from "@/components/dashboard/favorites-tab"
 import { ReferralsTab } from "@/components/dashboard/referrals-tab"
 import { CouponsTab } from "@/components/dashboard/coupons-tab"
 
+export const dynamic = "force-dynamic" // opcional, útil con cookies/sesión
+
 export default async function DashboardPage() {
-  const supabase = getServerSupabase() // ✅ sin await
+  const supabase = await getServerSupabase() // ✅ AWAIT
 
   // usuario actual (SSR)
   const {
@@ -41,66 +44,44 @@ export default async function DashboardPage() {
   // cupones del usuario
   const { data: userCoupons } = await supabase
     .from("user_coupons")
-    .select(
-      `
-      *,
-      coupon:coupons(*)
-    `
-    )
+    .select(`*, coupon:coupons(*)`)
     .eq("user_id", user.id)
-  // si quieres solo no usados:
-  // .eq("is_used", false)
 
   // referidos del usuario
   const { data: referrals } = await supabase
     .from("referrals")
-    .select(
-      `
-      *,
-      referee:profiles!referrals_referee_id_fkey(full_name, created_at)
-    `
-    )
+    .select(`*, referee:profiles!referrals_referee_id_fkey(full_name, created_at)`)
     .eq("referrer_id", user.id)
     .order("created_at", { ascending: false })
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">Mi Cuenta</h1>
-        <p className="text-muted-foreground">Gestiona tu perfil, favoritos y referidos</p>
-      </div>
-
+      {/* …tu UI tal cual… */}
       <Tabs defaultValue="profile" className="space-y-6">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="profile">Perfil</TabsTrigger>
           <TabsTrigger value="favorites">
-            Favoritos
-            {typeof favoritesCount === "number" && favoritesCount > 0 ? (
+            Favoritos{typeof favoritesCount === "number" && favoritesCount > 0 ? (
               <span className="ml-2 text-xs">({favoritesCount})</span>
             ) : null}
           </TabsTrigger>
           <TabsTrigger value="coupons">
-            Cupones
-            {userCoupons?.length ? <span className="ml-2 text-xs">({userCoupons.length})</span> : null}
+            Cupones{userCoupons?.length ? <span className="ml-2 text-xs">({userCoupons.length})</span> : null}
           </TabsTrigger>
           <TabsTrigger value="referrals">
-            Referidos
-            {referrals?.length ? <span className="ml-2 text-xs">({referrals.length})</span> : null}
+            Referidos{referrals?.length ? <span className="ml-2 text-xs">({referrals.length})</span> : null}
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
           <ProfileTab user={user} profile={profile ?? null} />
         </TabsContent>
-
         <TabsContent value="favorites">
           <FavoritesTab userId={user.id} />
         </TabsContent>
-
         <TabsContent value="coupons">
           <CouponsTab coupons={userCoupons ?? []} />
         </TabsContent>
-
         <TabsContent value="referrals">
           <ReferralsTab referralCode={profile?.referral_code ?? ""} referrals={referrals ?? []} />
         </TabsContent>

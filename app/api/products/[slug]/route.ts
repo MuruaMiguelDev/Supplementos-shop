@@ -1,24 +1,34 @@
+// app/api/products/[slug]/route.ts
 import 'server-only'
 import { NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic' // evita cacheo si dependes de cookies
+
 export async function GET(
   _request: Request,
-  ctx: { params: { slug: string } } // ✅ params NO es una Promesa
+  { params }: { params: { slug: string } }
 ) {
   try {
-    const supabase = getServerSupabase() // ✅ sin await
-    const { slug } = ctx.params
+    const supabase = await getServerSupabase(); // ✅ AWAIT
+    const slug = decodeURIComponent(params.slug);
 
+    // maybeSingle() no lanza error si no hay filas; devuelve data = null
     const { data: product, error } = await supabase
       .from('products')
       .select('*')
       .eq('slug', slug)
-      .single()
+      .maybeSingle();
 
-    if (error || !product) {
-      console.error('[api] Error fetching product by slug:', error)
-      return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+    if (error) {
+      // Si fuera el típico error de "no hay filas" con single(),
+      // puedes mapearlo a 404. Con maybeSingle() no debería suceder.
+      console.error('[api] Error fetching product by slug:', error);
+      return NextResponse.json({ error: 'Query error' }, { status: 500 });
+    }
+
+    if (!product) {
+      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     }
 
     const transformedProduct = {
@@ -50,14 +60,14 @@ export async function GET(
         subcategory: product.subcategory,
         brand: product.brand,
       },
-    }
+    };
 
-    return NextResponse.json(transformedProduct)
+    return NextResponse.json(transformedProduct, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
-    console.error('[api] Unexpected error in product by slug:', err)
+    console.error('[api] Unexpected error in product by slug:', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Unknown error' },
       { status: 500 }
-    )
+    );
   }
 }

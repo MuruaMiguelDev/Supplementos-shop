@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -7,6 +10,7 @@ import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious
 import { formatCurrency } from "@/src/lib/utils/currency"
 import { ArrowRight, Star, Zap, Shield, Truck } from "lucide-react"
 import { getServerSupabase } from "@/lib/supabase/server" // ⬅️ cambia a getServerSupabase
+
 
 export default async function HomePage() {
   let products: any[] = []

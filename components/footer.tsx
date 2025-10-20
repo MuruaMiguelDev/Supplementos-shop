@@ -128,7 +128,6 @@ export function Footer() {
 
         <div className="border-t mt-8 pt-8 text-center text-sm text-muted-foreground">
           <p>&copy; {new Date().getFullYear()} SupleMax. Todos los derechos reservados.</p>
-          <p>Desarrollado por <a href="https://portfolio-2025-eta-smoky.vercel.app/" target="_blank">MigueDev</a></p>
         </div>
       </div>
     </footer>

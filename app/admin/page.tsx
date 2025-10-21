@@ -1,3 +1,4 @@
+// app/(admin)/admin/page.tsx
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
@@ -13,6 +14,8 @@ import { AnalyticsTab } from "@/components/admin/analytics-tab"
 import { CouponsTab } from "@/components/admin/coupons-tab"
 import { AdminProfileTab } from "@/components/admin/admin-profile-tab"
 import { Shield } from "lucide-react"
+// 👇 nuevo: importamos el tab para importar productos
+import { ProductsImportTab } from "@/components/admin/products-tab"
 
 export default async function AdminPage() {
   try {
@@ -21,22 +24,18 @@ export default async function AdminPage() {
     redirect("/")
   }
 
-  // ✅ Cliente Supabase del lado del servidor
   const supabase = await getServerSupabase()
 
-  // ✅ Obtener usuario actual
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // ✅ Obtener perfil
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user?.id)
     .single()
 
-  // ✅ Consultas paralelas para estadísticas
   const [usersResult, ordersResult, revenueResult] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase.from("orders").select("id", { count: "exact", head: true }),
@@ -58,7 +57,7 @@ export default async function AdminPage() {
         <p className="text-muted-foreground">Gestiona tu tienda de suplementos</p>
       </div>
 
-      {/* ✅ Resumen general */}
+      {/* Resumen general */}
       <div className="grid gap-4 md:grid-cols-3 mb-8">
         <Card>
           <CardHeader className="pb-3">
@@ -84,10 +83,12 @@ export default async function AdminPage() {
         </Card>
       </div>
 
-      {/* ✅ Pestañas del panel admin */}
+      {/* Pestañas */}
       <Tabs defaultValue="users" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        {/* 👇 pasamos a 6 pestañas: agregamos "products" */}
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="users">Usuarios</TabsTrigger>
+          <TabsTrigger value="products">Productos</TabsTrigger>
           <TabsTrigger value="orders">Pedidos</TabsTrigger>
           <TabsTrigger value="analytics">Analíticas</TabsTrigger>
           <TabsTrigger value="coupons">Cupones</TabsTrigger>
@@ -96,6 +97,11 @@ export default async function AdminPage() {
 
         <TabsContent value="users">
           <UsersTab />
+        </TabsContent>
+
+        {/* 👇 nuevo tab de productos con importador */}
+        <TabsContent value="products">
+          <ProductsImportTab />
         </TabsContent>
 
         <TabsContent value="orders">

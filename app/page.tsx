@@ -42,7 +42,7 @@ export default async function HomePage() {
       }))
     }
   } catch (error) {
-    console.error("[v0] Error fetching featured products:", error)
+    console.error("Error fetching featured products:", error)
   }
 
   return (

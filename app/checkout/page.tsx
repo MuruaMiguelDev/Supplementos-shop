@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { useCartStore } from "@/src/lib/store/cart"
@@ -20,7 +20,6 @@ import Link from "next/link"
 import { ArrowLeft, CreditCard, Truck, MapPin, Tag, X, Check } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import MPPaymentBrick from "@/components/payments/MPPaymentBrick"
-import { useCallback } from "react"
 
 /** Overlay de carga inline */
 function LoadingOverlay({ show, text = "Procesando..." }: { show: boolean; text?: string }) {
@@ -57,16 +56,16 @@ export default function CheckoutPage() {
   const [overlay, setOverlay] = useState<{ show: boolean; text?: string }>({
     show: false,
     text: "",
-  });
+  })
 
   // versión estable y con guard para no re-renderizar si no cambia
   const setLoading = useCallback((loading: boolean, text?: string) => {
     setOverlay((prev) => {
-      const nextText = text || "Procesando...";
-      if (prev.show === loading && prev.text === nextText) return prev;
-      return { show: loading, text: nextText };
-    });
-  }, []);
+      const nextText = text || "Procesando..."
+      if (prev.show === loading && prev.text === nextText) return prev
+      return { show: loading, text: nextText }
+    })
+  }, [])
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -164,8 +163,21 @@ export default function CheckoutPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setFormData((f) => ({ ...f, [e.target.name]: e.target.value }))
 
+  /** Helper: obtiene o crea un ID de orden estable para idempotencia */
+  const getOrCreateOrderId = () => {
+    if (typeof window === "undefined") return crypto.randomUUID()
+    const existing = sessionStorage.getItem("order_id")
+    if (existing) return existing
+    const id = crypto.randomUUID()
+    sessionStorage.setItem("order_id", id)
+    return id
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Evita doble envío por clicks/refresh
+    if (isProcessing || overlay.show) return
     setIsProcessing(true)
 
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone) {
@@ -181,7 +193,11 @@ export default function CheckoutPage() {
       const supabase = createClient()
       setLoading(true, "Creando orden…")
 
+      // 🔑 ID estable para la orden (idempotente)
+      const orderId = getOrCreateOrderId()
+
       const orderData = {
+        id: orderId, // 👈 clave para upsert idempotente
         user_id: userId,
         customer_name: `${formData.firstName} ${formData.lastName}`,
         customer_email: formData.email,
@@ -206,11 +222,22 @@ export default function CheckoutPage() {
         notes: formData.notes || null,
       }
 
-      const { data: order, error } = await supabase.from("orders").insert(orderData).select().single()
+      // ✅ UPSERT idempotente (evita 409 por duplicados)
+      const { data: order, error } = await supabase
+        .from("orders")
+        .upsert(orderData, { onConflict: "id" })
+        .select()
+        .single()
+
       if (error || !order) {
         setLoading(false)
         toast({ title: "Error", description: "No se pudo procesar el pedido. Intenta nuevamente.", variant: "destructive" })
         setIsProcessing(false); return
+      }
+
+      // Persistimos el id por si el usuario refresca antes de pagar
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("order_id", orderId)
       }
 
       if (formData.paymentMethod === "card") {
@@ -365,16 +392,16 @@ export default function CheckoutPage() {
 
                 {/* Brick al elegir tarjeta y tener orden creada */}
                 {formData.paymentMethod === "card" && showBrick && createdOrder && (
-  <div className="mt-6">
-    <MPPaymentBrick
-      orderId={createdOrder.id}
-      amount={Number(createdOrder.total)}
-      buyerEmail={createdOrder.customer_email || formData.email}
-      onApproved={() => { clearCart(); }}
-      onLoadingChange={setLoading}
-    />
-  </div>
-)}
+                  <div className="mt-6">
+                    <MPPaymentBrick
+                      orderId={createdOrder.id}
+                      amount={Number(createdOrder.total)}
+                      buyerEmail={createdOrder.customer_email || formData.email}
+                      onApproved={() => { clearCart(); }}
+                      onLoadingChange={setLoading}
+                    />
+                  </div>
+                )}
 
                 {formData.paymentMethod !== "card" && (
                   <div className="mt-3 text-sm text-muted-foreground">

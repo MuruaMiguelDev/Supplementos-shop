@@ -18,8 +18,21 @@ export default function MPPaymentBrick({
   onApproved,
   onLoadingChange,
 }: Props) {
-  // Evita doble ejecución del efecto en StrictMode
+  // Evita doble init en StrictMode
   const mountedOnceRef = useRef(false);
+  // Evita doble submit del Brick (clicks rápidos / re-disparo del evento)
+  const submittingRef = useRef(false);
+
+  // Idempotency-Key estable por orden (persiste entre reintentos hasta éxito)
+  const idempotencyKey = useMemo(() => {
+    if (typeof window === "undefined") return crypto.randomUUID();
+    const keyName = `pay_attempt_${orderId}`;
+    const existing = sessionStorage.getItem(keyName);
+    if (existing) return existing;
+    const fresh = crypto.randomUUID();
+    sessionStorage.setItem(keyName, fresh);
+    return fresh;
+  }, [orderId]);
 
   useEffect(() => {
     if (!mountedOnceRef.current) {
@@ -38,18 +51,32 @@ export default function MPPaymentBrick({
     [amount, buyerEmail]
   );
 
-  const onSubmit = async ({ formData }: any) => {
+  const cleanupSession = () => {
+    if (typeof window === "undefined") return;
     try {
-      // formData de CardPayment trae: token, payment_method_id, issuer_id, installments,
-      // payer: { email, identification: { type, number } }
+      sessionStorage.removeItem("order_id");            // limpiamos el ID de la orden (flujo completado)
+      sessionStorage.removeItem(`pay_attempt_${orderId}`); // limpiamos el intento de pago
+    } catch {}
+  };
+
+  const onSubmit = async ({ formData }: any) => {
+    if (submittingRef.current) return; // 💥 bloqueo anti doble envío
+    submittingRef.current = true;
+
+    try {
       onLoadingChange?.(true, "Procesando pago…");
 
-      // Opcional: log para depurar en dev (quitar en prod)
-      // console.log("MP formData:", formData);
-
+      // IMPORTANTE:
+      // Este endpoint /api/mp/create-payment debe:
+      //  - Usar la Idempotency-Key para no crear múltiples pagos por el mismo intento.
+      //  - Actualizar la orden (upsert) por 'id' con el estado correspondiente.
       const res = await fetch("/api/mp/create-payment", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // Clave de idempotencia (debe ser forwardeada por tu ruta al request de MP si creas pagos directos)
+          "X-Idempotency-Key": idempotencyKey,
+        },
         body: JSON.stringify({
           orderId,
           formData: {
@@ -64,17 +91,26 @@ export default function MPPaymentBrick({
 
       const data = await res.json();
 
-      if (res.ok && data.status === "approved") {
+      if (res.ok && (data.status === "approved" || data.payment?.status === "approved")) {
+        // Limpieza de storage: orden finalizada
+        cleanupSession();
+
+        // Callback del padre (para vaciar carrito, etc.)
         onApproved?.(orderId);
+
+        // Redirección a confirmación
         window.location.href = `/pedido-confirmado?o=${orderId}`;
-      } else {
-        // Puedes mostrar un toast usando data.status / data.status_detail
-        // y dejar el brick visible para reintentar
+        return;
       }
-    } catch (err) {
-      // console.error("MP create-payment error:", err);
+
+      // Si no fue aprobado, no limpiamos la sesión para permitir reintento idempotente.
+      // Podés leer data.status / data.status_detail y mostrar un toast en el padre si lo deseás.
+    } catch (_err) {
+      // console.error("MP create-payment error:", _err);
+      // No limpiamos sesión para permitir reintento
     } finally {
       onLoadingChange?.(false);
+      submittingRef.current = false;
     }
   };
 
@@ -85,6 +121,7 @@ export default function MPPaymentBrick({
   const onError = (_err: any) => {
     // console.error("CardPayment Brick error:", _err);
     onLoadingChange?.(false);
+    submittingRef.current = false;
   };
 
   return (
@@ -92,7 +129,6 @@ export default function MPPaymentBrick({
       initialization={initialization}
       customization={{
         visual: { style: { theme: "dark" } },
-        // Si quieres forzar sólo crédito/débito, puedes excluir medios aquí
         // paymentMethods: { excludedPaymentTypes: ["ticket", "bank_transfer"] }
       }}
       onSubmit={onSubmit}

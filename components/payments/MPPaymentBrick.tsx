@@ -146,27 +146,27 @@ export default function MPPaymentBrick({
     onLoadingChange?.(false);
   };
 
-  const onError = (err: any) => {
-    try {
-      console.error("[MP] Error del Brick (obj):", err);
-      console.error("[MP] Error del Brick (json):", JSON.stringify(err, null, 2));
-    } catch {}
-    onLoadingChange?.(false);
-    submittingRef.current = false;
-  };
+const onError = (err: any) => {
+  if (err?.type === "non_critical" && err?.cause === "missing_payment_information") {
+    console.warn("[MP] Aviso (installments):", err?.message);
+    return;
+  }
+  console.error("[MP] Error del Brick:", err);
+  onLoadingChange?.(false);
+  submittingRef.current = false;
+};
 
   return (
     <CardPayment
-      initialization={initialization}
-      customization={{
-        visual: { style: { theme: "dark" } },
-        paymentMethods: {
-          // ✅ forma correcta de excluir tipos
-          types: { excluded: ["ticket", "bank_transfer"] },
-          // minInstallments: 1,
-          // maxInstallments: 12,
-        },
-      }}
+initialization={initialization}
+  customization={{
+    visual: { style: { theme: "dark" } },
+    processingMode: "gateway",        // ← prueba con esto
+    paymentMethods: {
+      // durante la prueba NO excluyas nada, deja que el Brick decida
+      // types: { excluded: ["ticket", "bank_transfer"] }
+    },
+  }}
       onSubmit={onSubmit}
       onReady={onReady}
       onError={onError}

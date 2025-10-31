@@ -158,18 +158,17 @@ const onError = (err: any) => {
 
   return (
     <CardPayment
-initialization={initialization}
+  initialization={initialization}
   customization={{
-    visual: { style: { theme: "dark" } },
-    processingMode: "gateway",        // ← prueba con esto
-    paymentMethods: {
-      // durante la prueba NO excluyas nada, deja que el Brick decida
-      // types: { excluded: ["ticket", "bank_transfer"] }
-    },
-  }}
-      onSubmit={onSubmit}
-      onReady={onReady}
-      onError={onError}
-    />
+  visual: { style: { theme: "dark" } },
+  paymentMethods: {
+    minInstallments: 1,
+    maxInstallments: 1,
+  },
+}}
+  onSubmit={onSubmit}
+  onReady={onReady}
+  onError={onError}
+/>
   );
 }
